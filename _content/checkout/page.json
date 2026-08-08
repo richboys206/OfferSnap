@@ -1,0 +1,12 @@
+{
+  "$id": "checkout",
+  "slug": "checkout",
+  "template": "pagamento",
+  "type": "checkout",
+  "name": "Checkout Universal",
+  "title": "Contribuindo para Ajude o cérebro do Rafinha a continuar tentando | Vaquinhas online",
+  "description": "Doar faz bem e você faz a diferença! Conheça minha vaquinha Ajude o cérebro do Rafinha a continuar tentando",
+  "checkoutUrl": "/checkout",
+  "createdAt": "2026-08-05T00:00:00.000Z",
+  "updatedAt": "2026-08-05T00:00:00.000Z"
+}

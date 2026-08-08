@@ -1,0 +1,12 @@
+{
+  "$id": "vakinha",
+  "slug": "vakinha",
+  "template": "inicio",
+  "type": "page",
+  "name": "Vakinha",
+  "title": "Ajude o cérebro do Vakinha a continuar tentando | Organizada por Paulo",
+  "description": "Vaquinha Ajude o cérebro do Vakinha a continuar tentando na categoria Saúde / Tratamentos. Contribua!",
+  "checkoutUrl": "/checkout",
+  "createdAt": "2026-08-05T00:00:00.000Z",
+  "updatedAt": "2026-08-05T00:00:00.000Z"
+}
