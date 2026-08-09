@@ -64,7 +64,7 @@ export default function PageEditor(props: EditFormState) {
   const [fields, setFields] = useState<PageFields>(EMPTY_FIELDS);
   const [queroAjudar, setQueroAjudar] = useState<QueroAjudarSettings>({
     text: "Quero Ajudar",
-    color: "#009d4e",
+    color: "#009dff",
     location: "padrao",
   });
   const [isPending, startTransition] = useTransition();
@@ -131,7 +131,8 @@ export default function PageEditor(props: EditFormState) {
               id="slug"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              placeholder="ex: minha-vaquinha"
+              placeholder="ex: minha-campanha"
+              autoComplete="off"
             />
             <small style={{ color: "var(--muted)" }}>
               {props.isNew
@@ -145,7 +146,8 @@ export default function PageEditor(props: EditFormState) {
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nome da vaquinha"
+              placeholder="Nome da campanha"
+              autoComplete="off"
             />
           </div>
           <div className="field">
@@ -154,6 +156,7 @@ export default function PageEditor(props: EditFormState) {
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              autoComplete="off"
             />
           </div>
           <div className="field">
@@ -174,6 +177,7 @@ export default function PageEditor(props: EditFormState) {
               id="checkoutUrl"
               value={checkoutUrl}
               onChange={(e) => setCheckoutUrl(e.target.value)}
+              autoComplete="off"
             />
           </div>
           <div className="field">
@@ -182,6 +186,7 @@ export default function PageEditor(props: EditFormState) {
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              autoComplete="off"
             />
           </div>
         </div>
@@ -222,13 +227,14 @@ export default function PageEditor(props: EditFormState) {
             )}
 
             <div className="field">
-              <label htmlFor="field-id">ID da vaquinha</label>
+              <label htmlFor="field-id">ID da campanha</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <input
                   id="field-id"
                   value={fields.id}
                   onChange={(e) => applyField("id", e.target.value)}
                   placeholder="ID"
+                  autoComplete="off"
                   style={{ flex: 1 }}
                 />
                 <button
@@ -248,7 +254,8 @@ export default function PageEditor(props: EditFormState) {
                 id="field-title"
                 value={fields.title}
                 onChange={(e) => applyField("title", e.target.value)}
-                placeholder="Título da vaquinha"
+                placeholder="Título da campanha"
+                autoComplete="off"
               />
             </div>
 
@@ -259,6 +266,7 @@ export default function PageEditor(props: EditFormState) {
                 value={fields.subtitle}
                 onChange={(e) => applyField("subtitle", e.target.value)}
                 placeholder="Resumo exibido abaixo do título"
+                autoComplete="off"
                 style={{ minHeight: 70 }}
               />
             </div>
@@ -267,13 +275,14 @@ export default function PageEditor(props: EditFormState) {
           <div className="card">
             <h3>Sobre</h3>
             <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 0 }}>
-              Texto da seção "Sobre" da vaquinha.
+              Texto da seção "Sobre" da campanha.
             </p>
             <div className="field">
               <textarea
                 value={fields.sobre}
                 onChange={(e) => applyField("sobre", e.target.value)}
                 placeholder="Conteúdo da seção Sobre"
+                autoComplete="off"
                 style={{ minHeight: 160, fontFamily: "inherit" }}
               />
             </div>
@@ -292,6 +301,7 @@ export default function PageEditor(props: EditFormState) {
                 onChange={(e) =>
                   setQueroAjudar((q) => ({ ...q, text: e.target.value }))
                 }
+                autoComplete="off"
               />
             </div>
             <div className="field">
@@ -311,6 +321,7 @@ export default function PageEditor(props: EditFormState) {
                   onChange={(e) =>
                     setQueroAjudar((q) => ({ ...q, color: e.target.value }))
                   }
+                  autoComplete="off"
                   style={{ flex: 1 }}
                 />
               </div>

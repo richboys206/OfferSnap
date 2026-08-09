@@ -31,6 +31,12 @@ export default async function EditPage({
     <>
       {ok && <div className="alert">{ok}</div>}
 
+      <div style={{ marginBottom: 16 }}>
+        <Link href="/admin" className="back-link">
+          ← Voltar ao gerenciador
+        </Link>
+      </div>
+
       <PageEditor
         submitLabel="Salvar alterações"
         initial={{

@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { listPageSlugs, readPage } from "@/lib/content";
-import {
-  deletePageAction,
-  duplicatePageAction,
-  importFromUrlAction,
-} from "../actions";
+import { importFromUrlAction } from "../actions";
+import PagesManager from "../components/PagesManager";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +14,13 @@ export default async function AdminDashboard({
   const slugs = listPageSlugs();
   const pages = slugs
     .map((s) => readPage(s))
-    .filter((p): p is NonNullable<typeof p> => p !== null);
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .map((p) => ({
+      slug: p.meta.slug,
+      name: p.meta.name,
+      template: p.meta.template,
+      createdAt: p.meta.createdAt,
+    }));
 
   return (
     <>
@@ -29,11 +32,11 @@ export default async function AdminDashboard({
       )}
 
       <div className="card">
-        <h3>Importar página da Vaquinha por URL</h3>
+        <h3>Importar página por URL</h3>
         <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 4 }}>
-          Cole o link de uma página da Vakinha. A página será buscada e criada
-          aqui usando o template padrão, já com o conteúdo (textos e imagens)
-          da página original.
+          Cole o link de uma página que deseja importar. A página será buscada
+          e criada aqui usando o template padrão, já com o conteúdo (textos e
+          imagens) da página original.
         </p>
         <form
           action={importFromUrlAction}
@@ -42,7 +45,8 @@ export default async function AdminDashboard({
           <input
             name="url"
             type="url"
-            placeholder="https://www.vakinha.com.br/vaquinha/..."
+            placeholder="https://exemplo.com.br/pagina-da-campanha"
+            autoComplete="off"
             required
             style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 14 }}
           />
@@ -54,68 +58,7 @@ export default async function AdminDashboard({
 
       <div className="card">
         <h3>Páginas publicadas</h3>
-        {pages.length === 0 ? (
-          <p style={{ color: "var(--muted)" }}>
-            Nenhuma página ainda.{" "}
-            <Link href="/admin/new">Crie a primeira</Link>.
-          </p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Slug / URL</th>
-                <th>Template</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pages.map((p) => (
-                <tr key={p.meta.slug}>
-                  <td style={{ fontWeight: 600 }}>{p.meta.name}</td>
-                  <td>
-                    <Link href={`/${p.meta.slug}`} target="_blank">
-                      /{p.meta.slug}
-                    </Link>
-                  </td>
-                  <td>
-                    <span className="badge badge-page">
-                      {p.meta.template === "inicio" ? "Vakinha" : p.meta.template}
-                    </span>
-                  </td>
-                  <td className="row-actions">
-                    <Link href={`/admin/${p.meta.slug}/edit`}>Editar</Link>
-                    <Link href={`/${p.meta.slug}`} target="_blank">
-                      Abrir
-                    </Link>
-                    <form
-                      action={async () => {
-                        "use server";
-                        await duplicatePageAction(p.meta.slug);
-                      }}
-                      style={{ display: "inline" }}
-                    >
-                      <button type="submit" className="link-btn">
-                        Duplicar
-                      </button>
-                    </form>
-                    <form
-                      action={async () => {
-                        "use server";
-                        await deletePageAction(p.meta.slug);
-                      }}
-                      style={{ display: "inline" }}
-                    >
-                      <button type="submit" className="link-btn danger">
-                        Excluir
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <PagesManager pages={pages} />
       </div>
     </>
   );

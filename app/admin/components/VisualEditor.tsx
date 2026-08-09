@@ -250,7 +250,7 @@ const VisualEditor = forwardRef<
 
   const qa = queroAjudar || {
     text: "Quero Ajudar",
-    color: "#009d4e",
+    color: "#009dff",
     location: "padrao" as const,
   };
   const qaJson = JSON.stringify(qa).replace(/</g, "\\u003c");
@@ -261,19 +261,19 @@ const VisualEditor = forwardRef<
 <link rel="stylesheet" href="/styles/inline.css" />
 <style>
 #__next>*{cursor:pointer}
-[data-gid]{outline:1px dashed rgba(0,157,78,0);transition:outline-color .12s}
-[data-gid]:hover{outline:1px dashed #009d4e; outline-offset:1px}
+[data-gid]{outline:1px dashed rgba(0,157,255,0);transition:outline-color .12s}
+[data-gid]:hover{outline:1px dashed #009dff; outline-offset:1px}
 [data-gid] [data-gid]{outline:none}
-[contenteditable="true"]{outline:2px solid #009d4e !important; outline-offset:2px; cursor:text !important}
+[contenteditable="true"]{outline:2px solid #009dff !important; outline-offset:2px; cursor:text !important}
 .ve-insert{position:relative;display:flex;align-items:center;justify-content:center;height:14px;margin:6px 0;min-width:100%;opacity:0;transition:opacity .12s;cursor:pointer}
 .ve-insert:hover,.ve-insert.ve-armed{opacity:1}
-.ve-insert::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:#d9ece2;border-radius:2px}
-.ve-insert:hover::before,.ve-insert.ve-armed::before{background:#009d4e}
-.ve-insert::after{content:"+";position:relative;z-index:1;width:22px;height:22px;border-radius:50%;background:#fff;border:1.5px solid #009d4e;color:#009d4e;font-size:16px;line-height:20px;text-align:center;font-weight:700}
+.ve-insert::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:#cfe6fb;border-radius:2px}
+.ve-insert:hover::before,.ve-insert.ve-armed::before{background:#009dff}
+.ve-insert::after{content:"+";position:relative;z-index:1;width:22px;height:22px;border-radius:50%;background:#fff;border:1.5px solid #009dff;color:#009dff;font-size:16px;line-height:20px;text-align:center;font-weight:700}
 .ve-menu{position:fixed;z-index:9999;background:#fff;border:1px solid var(--border, #dfe5e1);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:6px;display:flex;flex-direction:column;min-width:170px}
 .ve-menu button{display:flex;align-items:center;gap:8px;border:none;background:#fff;color:#1f2a24;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;font-family:inherit}
-.ve-menu button:hover{background:#eef5f0}
-.ve-menu button .ve-ico{width:20px;height:20px;border-radius:6px;background:#eaf4ee;color:#009d4e;font-weight:700;line-height:20px;text-align:center}
+.ve-menu button:hover{background:#eef5ff}
+.ve-menu button .ve-ico{width:20px;height:20px;border-radius:6px;background:#e3f0ff;color:#009dff;font-weight:700;line-height:20px;text-align:center}
 </style></head>
 <body>
 <div id="__next" style="display:flex;flex-direction:column">${previewHtml}</div>
@@ -342,7 +342,7 @@ const VisualEditor = forwardRef<
             fontFamily: "inherit",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#eef5f0";
+            (e.currentTarget as HTMLElement).style.background = "#eef5ff";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.background = "#fff";
@@ -353,8 +353,8 @@ const VisualEditor = forwardRef<
               width: 20,
               height: 20,
               borderRadius: 6,
-              background: "#eaf4ee",
-              color: "#009d4e",
+              background: "#e3f0ff",
+              color: "#009dff",
               fontWeight: 700,
               lineHeight: "20px",
               textAlign: "center",
@@ -494,6 +494,7 @@ const VisualEditor = forwardRef<
                   value={draftSrc}
                   onChange={(e) => setDraftSrc(e.target.value)}
                   placeholder="/uploads/imagem.png"
+                  autoComplete="off"
                 />
               </div>
               <button
