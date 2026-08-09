@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { listPages, readPage } from "@/lib/content";
-import { updatePageAction } from "../../actions";
-import PageEditor from "../../components/PageEditor";
+import { updatePageAction } from "../../../actions";
+import PageEditor from "../../../components/PageEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -17,26 +18,17 @@ export default async function EditPage({
 
   if (!page) {
     return (
-      <main className="admin-shell">
-        <div className="admin-topbar">
-          <h1>Página não encontrada</h1>
-          <a href="/admin" className="btn btn-secondary">
-            Voltar
-          </a>
-        </div>
-      </main>
+      <>
+        <p>
+          Página não encontrada.{" "}
+          <Link href="/admin">Voltar ao dashboard</Link>.
+        </p>
+      </>
     );
   }
 
   return (
-    <main className="admin-shell">
-      <div className="admin-topbar">
-        <h1>Editar: {page.meta.name}</h1>
-        <a href="/admin" className="btn btn-secondary">
-          Voltar
-        </a>
-      </div>
-
+    <>
       {ok && <div className="alert">{ok}</div>}
 
       <PageEditor
@@ -57,6 +49,6 @@ export default async function EditPage({
         }))}
         action={updatePageAction}
       />
-    </main>
+    </>
   );
 }

@@ -4,8 +4,7 @@ import {
   deletePageAction,
   duplicatePageAction,
   importFromUrlAction,
-  logoutAction,
-} from "./actions";
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,24 +20,7 @@ export default async function AdminDashboard({
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
   return (
-    <main className="admin-shell">
-      <div className="admin-topbar">
-        <h1>Gerenciador de Páginas</h1>
-        <div>
-          <Link href="/admin/new" className="btn">
-            + Nova página
-          </Link>{" "}
-          <Link href="/checkout" className="btn btn-secondary" target="_blank">
-            Ver checkout universal
-          </Link>{" "}
-          <form action={logoutAction} style={{ display: "inline" }}>
-            <button className="btn btn-secondary" type="submit">
-              Sair
-            </button>
-          </form>
-        </div>
-      </div>
-
+    <>
       {params.ok && <div className="alert">{params.ok}</div>}
       {params.erro && (
         <div className="alert" style={{ background: "#fdecea", color: "#c62828" }}>
@@ -135,6 +117,6 @@ export default async function AdminDashboard({
           </table>
         )}
       </div>
-    </main>
+    </>
   );
 }

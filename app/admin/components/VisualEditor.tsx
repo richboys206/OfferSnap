@@ -72,12 +72,8 @@ const VisualEditor = forwardRef<
   ref
 ) {
   const docRef = useRef<Document | null>(null);
-  if (docRef.current === null) {
-    docRef.current = buildDoc(initial);
-  }
-
-  const [previewHtml, setPreviewHtml] = useState(() => serialize(docRef.current!));
-  const [info, setInfo] = useState<Map<string, NodeInfo>>(() => buildInfo(docRef.current!));
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [info, setInfo] = useState<Map<string, NodeInfo>>(new Map());
   const [selected, setSelected] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [draftSrc, setDraftSrc] = useState<string>("");
@@ -87,9 +83,11 @@ const VisualEditor = forwardRef<
     y: number;
   } | null>(null);
 
-  // Informa os campos editáveis (cidade, id, título, subtítulo, sobre) ao
-  // painel de ferramentas assim que o editor monta.
+  // DOMParser só existe no browser: monta o documento após a hidratação.
   useEffect(() => {
+    docRef.current = buildDoc(initial);
+    setPreviewHtml(serialize(docRef.current));
+    setInfo(buildInfo(docRef.current));
     onFieldsChange?.(extractFields(initial));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

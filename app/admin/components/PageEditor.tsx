@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import VisualEditor, {
   type QueroAjudarSettings,
   type VisualEditorHandle,
 } from "./VisualEditor";
 import CitySelect from "./CitySelect";
 import {
+  EMPTY_FIELDS,
   extractFields,
   hasCityField,
   type PageFields,
@@ -60,9 +61,7 @@ export default function PageEditor(props: EditFormState) {
   const [related, setRelated] = useState<string[]>(() =>
     Array.from({ length: 4 }, (_, i) => props.initial.related?.[i] ?? "")
   );
-  const [fields, setFields] = useState<PageFields>(() =>
-    extractFields(props.initial.body ?? "")
-  );
+  const [fields, setFields] = useState<PageFields>(EMPTY_FIELDS);
   const [queroAjudar, setQueroAjudar] = useState<QueroAjudarSettings>({
     text: "Quero Ajudar",
     color: "#009d4e",
@@ -71,7 +70,13 @@ export default function PageEditor(props: EditFormState) {
   const [isPending, startTransition] = useTransition();
   const veRef = useRef<VisualEditorHandle>(null);
 
-  const pageHasCity = hasCityField(props.initial.body ?? "");
+  const [pageHasCity, setPageHasCity] = useState(false);
+
+  // DOMParser só existe no browser: extrai os campos após a hidratação.
+  useEffect(() => {
+    setFields(extractFields(props.initial.body ?? ""));
+    setPageHasCity(hasCityField(props.initial.body ?? ""));
+  }, [props.initial.body]);
 
   function handleFieldsChange(next: PageFields) {
     setFields((prev) => (fieldsEqual(prev, next) ? prev : next));
