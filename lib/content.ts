@@ -1,9 +1,47 @@
 import fs from "fs";
 import path from "path";
 
-export const CONTENT_DIR = path.join(process.cwd(), "_content");
+const SEED_DIR = path.join(process.cwd(), "_content");
+// Vercel filesystem é read-only em /var/task — escrita só em /tmp (efêmero)
+export const CONTENT_DIR = process.env.VERCEL
+  ? path.join("/tmp", "_content")
+  : path.join(process.cwd(), "_content");
 export const PAGES_DIR = path.join(CONTENT_DIR, "pages");
 export const CHECKOUT_DIR = path.join(CONTENT_DIR, "checkout");
+const SEED_PAGES_DIR = path.join(SEED_DIR, "pages");
+const SEED_CHECKOUT_DIR = path.join(SEED_DIR, "checkout");
+
+function seedFromRepoIfNeeded() {
+  if (CONTENT_DIR === SEED_DIR) return;
+  try {
+    // já semeado?
+    if (fs.existsSync(path.join(PAGES_DIR, "vakinha", "page.json"))) return;
+    if (!fs.existsSync(SEED_DIR)) return;
+    fs.mkdirSync(CONTENT_DIR, { recursive: true });
+    // Node 16+: cpSync disponível
+    const cp = (fs as unknown as { cpSync?: typeof fs.cpSync }).cpSync;
+    if (typeof cp === "function") {
+      if (fs.existsSync(SEED_PAGES_DIR)) cp(SEED_PAGES_DIR, PAGES_DIR, { recursive: true, force: true });
+      if (fs.existsSync(SEED_CHECKOUT_DIR)) cp(SEED_CHECKOUT_DIR, CHECKOUT_DIR, { recursive: true, force: true });
+    } else {
+      // fallback manual
+      const copyRecursive = (src: string, dest: string) => {
+        if (!fs.existsSync(src)) return;
+        fs.mkdirSync(dest, { recursive: true });
+        for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+          const s = path.join(src, entry.name);
+          const d = path.join(dest, entry.name);
+          if (entry.isDirectory()) copyRecursive(s, d);
+          else fs.copyFileSync(s, d);
+        }
+      };
+      copyRecursive(SEED_PAGES_DIR, PAGES_DIR);
+      copyRecursive(SEED_CHECKOUT_DIR, CHECKOUT_DIR);
+    }
+  } catch {
+    // silencioso: se falhar, ensureContentDirs cria dirs vazios
+  }
+}
 
 export type TemplateKind = "inicio" | "pagamento";
 
@@ -28,6 +66,7 @@ export interface PageRecord {
 }
 
 export function ensureContentDirs() {
+  seedFromRepoIfNeeded();
   fs.mkdirSync(PAGES_DIR, { recursive: true });
   fs.mkdirSync(CHECKOUT_DIR, { recursive: true });
 }
