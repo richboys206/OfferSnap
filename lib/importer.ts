@@ -163,5 +163,13 @@ export async function importFromUrl(rawUrl: string): Promise<{ slug: string; nam
     body
   );
 
+  // Dispara deploy automático no Vercel se hook configurado (opcional)
+  // Com Blob, a página já fica ao vivo imediatamente via readPageAsync sem precisar redeploy,
+  // mas se o projeto tiver Git conectado, o hook garante que o clone vire commit durável
+  const hookUrl = process.env.VERCEL_DEPLOY_HOOK_URL || process.env.DEPLOY_HOOK_URL;
+  if (hookUrl) {
+    void fetch(hookUrl, { method: "POST", signal: AbortSignal.timeout(8000) }).catch(() => {});
+  }
+
   return { slug, name };
 }
