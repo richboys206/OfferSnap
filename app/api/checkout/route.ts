@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
     if (!payMode) return NextResponse.json({ ok: false, error: "payMode deve ser 'pix' ou 'card'" }, { status: 400 });
 
     const valorCentavos = parseValor(body.valorCentavos ?? body.amount ?? body.valor);
-    if (valorCentavos === null || valorCentavos < 500) {
-      return NextResponse.json({ ok: false, error: "Valor mínimo é R$ 5,00 (BravoPay exige 500 centavos)" }, { status: 400 });
+    if (valorCentavos === null || valorCentavos < 1500) {
+      return NextResponse.json({ ok: false, error: "Valor mínimo é R$ 15,00" }, { status: 400 });
     }
     if (valorCentavos > 10000000) {
       return NextResponse.json({ ok: false, error: "Valor muito alto" }, { status: 400 });

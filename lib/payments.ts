@@ -39,7 +39,7 @@ export async function criarCobranca(payload: CheckoutPayload): Promise<CheckoutR
   const endpoint = `${apiUrl}/transactions`;
   const idempotencyKey = crypto.randomUUID();
 
-  // BravoPay exige amount_cents >= 500
+  // Produto exige amount_cents >= 1500 (R$ 15,00) — BravoPay mínimo é 500, mas regra de negócio é 1500
   const amount_cents = payload.valorCentavos;
 
   const body: Record<string, unknown> = {

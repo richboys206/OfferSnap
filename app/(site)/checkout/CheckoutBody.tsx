@@ -32,11 +32,86 @@ export default function CheckoutBody({ html }: { html: string }) {
       return "R$ " + v.toFixed(2).replace(".", ",");
     }
 
+    const MIN_CENTAVOS = 1500;
+    const MIN_LABEL = "R$ 15,00";
+
     function getValorCentavos(): number {
       const raw = (amount?.value || "").replace(/\D/g, "");
       const base = raw ? parseInt(raw, 10) : 0;
       const bundleOn = (bundle?.checked || heart?.checked) ?? false;
       return base + (bundleOn ? 499 : 0);
+    }
+
+    function ensureMinHintEl(): HTMLElement | null {
+      if (!amount || !root) return null;
+      let el = root.querySelector<HTMLElement>("#checkoutMinHint");
+      if (el) return el;
+      el = document.createElement("div");
+      el.id = "checkoutMinHint";
+      el.textContent = "Valor mínimo: R$ 15,00";
+      el.style.cssText =
+        "margin-top:6px;font-size:12px;color:#67736c;font-family:Lato,Arial,sans-serif";
+      const wrapper = amount.closest("div") || amount.parentElement;
+      // verifica se wrapper é o container do input (fyBPlD) — insere após seu parent (cVaWUk)
+      const targetParent = wrapper?.parentElement ?? wrapper;
+      const anchor = wrapper?.parentElement ? wrapper.parentElement : wrapper;
+      if (anchor && anchor.parentElement) {
+        // tenta inserir após o bloco do input
+        const block = amount.closest(".sc-cWSHoV") || anchor;
+        if (block && block.parentElement) block.insertAdjacentElement("afterend", el);
+        else anchor.insertAdjacentElement("afterend", el);
+      } else if (amount.parentElement) {
+        amount.parentElement.insertAdjacentElement("afterend", el);
+      } else {
+        amount.insertAdjacentElement("afterend", el);
+      }
+      return el;
+    }
+
+    function ensureMinErrorEl(): HTMLElement | null {
+      if (!amount || !root) return null;
+      let el = root.querySelector<HTMLElement>("#checkoutMinError");
+      if (el) return el;
+      el = document.createElement("div");
+      el.id = "checkoutMinError";
+      el.setAttribute("role", "alert");
+      el.setAttribute("aria-live", "polite");
+      el.style.cssText =
+        "margin-top:8px;padding:10px 12px;border-radius:8px;font-family:Lato,Arial,sans-serif;font-size:13px;font-weight:600;background:#FFE6E6;border:1px solid #e74c3c;color:#7a1a1a;display:none";
+      // injeta logo abaixo do hint (ou abaixo do input se hint não existir)
+      const hint = root!.querySelector<HTMLElement>("#checkoutMinHint");
+      if (hint) {
+        hint.insertAdjacentElement("afterend", el);
+        return el;
+      }
+      const wrapper = amount.closest("div") || amount.parentElement;
+      if (wrapper && wrapper.parentElement) {
+        wrapper.parentElement.insertBefore(el, wrapper.nextSibling);
+      } else {
+        amount.insertAdjacentElement("afterend", el);
+      }
+      return el;
+    }
+
+    function showMinError(show: boolean) {
+      const el = ensureMinErrorEl();
+      if (!el) return;
+      if (show) {
+        el.textContent = `Valor mínimo é ${MIN_LABEL}. Por favor, informe um valor igual ou superior a ${MIN_LABEL}.`;
+        el.style.display = "block";
+        if (amount) {
+          amount.style.borderColor = "#e74c3c";
+          amount.style.boxShadow = "0 0 0 2px rgba(231,76,60,.15)";
+          amount.setAttribute("aria-invalid", "true");
+        }
+      } else {
+        el.style.display = "none";
+        if (amount) {
+          amount.style.borderColor = "";
+          amount.style.boxShadow = "";
+          amount.removeAttribute("aria-invalid");
+        }
+      }
     }
 
     function recalc() {
@@ -55,10 +130,13 @@ export default function CheckoutBody({ html }: { html: string }) {
       const isLoading = (btn as HTMLButtonElement).dataset.loading === "true";
       const raw = (amount?.value || "").replace(/\D/g, "");
       const centavos = raw ? parseInt(raw, 10) + ((bundle?.checked || heart?.checked) ? 499 : 0) : 0;
-      const habilitado = centavos >= 500 && !isLoading;
+      const habilitado = centavos >= MIN_CENTAVOS && !isLoading;
       btn.disabled = !habilitado;
       btn.style.pointerEvents = habilitado ? "auto" : "none";
       btn.style.opacity = habilitado ? "1" : "0.6";
+      // mensagem inline quando valor >0 mas abaixo do mínimo
+      const abaixoMinimo = centavos > 0 && centavos < MIN_CENTAVOS;
+      showMinError(abaixoMinimo);
       // troca classe visual: ebXcre = desabilitado cinza, brsGow = habilitado verde
       if (habilitado) {
         btn.classList.remove("ebXcre");
@@ -107,6 +185,9 @@ export default function CheckoutBody({ html }: { html: string }) {
     }
     payPix?.addEventListener("change", updateButtonState);
     payCard?.addEventListener("change", updateButtonState);
+    // hint estático de valor mínimo (visível sempre)
+    ensureMinHintEl();
+    ensureMinErrorEl();
     recalc();
 
     return () => {
@@ -144,9 +225,21 @@ export default function CheckoutBody({ html }: { html: string }) {
     const bundleOn = (bundle?.checked || heart?.checked) ?? false;
     const valorCentavos = baseCentavos + (bundleOn ? 499 : 0);
 
-    if (valorCentavos < 500) {
-      setMsg("Informe um valor mínimo de R$ 5,00");
+    if (valorCentavos < 1500) {
+      setMsg("Valor mínimo é R$ 15,00. Por favor, informe um valor igual ou superior a R$ 15,00.");
       setMsgType("error");
+      // também mostra erro inline próximo ao input
+      const inline = root.querySelector<HTMLElement>("#checkoutMinError");
+      if (inline) {
+        inline.textContent = "Valor mínimo é R$ 15,00. Por favor, informe um valor igual ou superior a R$ 15,00.";
+        inline.style.display = "block";
+      }
+      const amt = root.querySelector<HTMLInputElement>("#amount");
+      if (amt) {
+        amt.style.borderColor = "#e74c3c";
+        amt.setAttribute("aria-invalid", "true");
+        amt.focus();
+      }
       return;
     }
 
@@ -233,11 +326,12 @@ export default function CheckoutBody({ html }: { html: string }) {
       if (btnEl) btnEl.dataset.loading = "false";
       // força reavaliação do botão
       const raw2 = (amount?.value || "").replace(/\D/g, "");
-      const cent = raw2 ? parseInt(raw2, 10) : 0;
+      const bundleOn2 = (bundle?.checked || heart?.checked) ?? false;
+      const cent = raw2 ? parseInt(raw2, 10) + (bundleOn2 ? 499 : 0) : 0;
       if (btnEl) {
-        const habilitado2 = cent >= 500;
+        const habilitado2 = cent >= 1500;
         btnEl.disabled = !habilitado2;
-        if (habilitado2) { btnEl.classList.remove("ebXcre"); btnEl.classList.add("brsGow"); }
+        if (habilitado2) { btnEl.classList.remove("ebXcre"); btnEl.classList.add("brsGow"); } else { btnEl.classList.add("ebXcre"); btnEl.classList.remove("brsGow"); }
       }
     }
   }
