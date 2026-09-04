@@ -156,6 +156,14 @@ export function listPages(): PageRecord[] {
     .filter((p): p is PageRecord => p !== null);
 }
 
+export function applyPageSanitizers(body: string): string {
+  // ordem: remove logo, remove todos header links, injeta botão copiar link
+  let out = disableLogoLinks(body);
+  out = disableHeaderLinks(out);
+  out = injectCopyVakinhaLinkButton(out);
+  return out;
+}
+
 export function readPage(slug: string): PageRecord | null {
   const safe = normalizeSlug(slug);
   // Se foi deletada explicitamente, não ressuscita do seed
@@ -167,7 +175,7 @@ export function readPage(slug: string): PageRecord | null {
     try {
       const meta: PageMeta = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as PageMeta;
       const rawBody = fs.readFileSync(path.join(dir, "body.html"), "utf-8");
-      return { meta, body: disableLogoLinks(rawBody) };
+      return { meta, body: applyPageSanitizers(rawBody) };
     } catch {
       // cai para fallback
     }
@@ -191,7 +199,7 @@ export function readPage(slug: string): PageRecord | null {
             if (fs.existsSync(srcBody)) fs.copyFileSync(srcBody, path.join(dest, "body.html"));
           }
         } catch {}
-        return { meta, body: disableLogoLinks(rawBody) };
+        return { meta, body: applyPageSanitizers(rawBody) };
       } catch {
         return null;
       }
@@ -214,7 +222,7 @@ export function savePage(
   }
   const metaOut: PageMeta = { ...meta, slug };
   const dir = path.join(PAGES_DIR, slug);
-  const sanitized = disableLogoLinks(body);
+  const sanitized = applyPageSanitizers(body);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "page.json"), JSON.stringify(metaOut, null, 2), "utf-8");
   fs.writeFileSync(path.join(dir, "body.html"), sanitized, "utf-8");
@@ -287,7 +295,9 @@ export function readCheckout(): PageRecord {
   }
   const meta: PageMeta = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as PageMeta;
   const rawBody = fs.readFileSync(bodyPath, "utf-8");
-  const body = disableLogoLinks(rawBody);
+  // Checkout: remove header links mas NÃO injeta botão de copiar link (só nas páginas)
+  let body = disableLogoLinks(rawBody);
+  body = disableHeaderLinks(body);
   let css = "";
   try {
     css = fs.readFileSync(cssPath, "utf-8");
@@ -469,6 +479,70 @@ export function disableLogoLinks(body: string): string {
       return `<span data-logo-disabled="true" style="display:contents;cursor:default;pointer-events:none">${svg}</span>`;
     }
   );
+}
+
+/**
+ * Remove TODOS os links do cabeçalho (headerContainer) — o usuário pediu para
+ * o header não ter nenhum link clicável que leve para fora ou para o gerenciador.
+ * Converte <a ...>...</a> dentro do <header id="headerContainer"> para <span> sem href/target/rel e com pointer-events:none.
+ */
+export function disableHeaderLinks(body: string): string {
+  if (!body || !body.includes('headerContainer')) return body;
+  return body.replace(/<header[^>]*id="headerContainer"[^>]*>[\s\S]*?<\/header>/gi, (header) => {
+    let out = header.replace(/<a(\s[^>]*?)>/gi, (m, attrs) => {
+      const cleaned = attrs
+        .replace(/\s*href\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/\s*target\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/\s*rel\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+      return `<span${cleaned} data-header-link-disabled="true" style="pointer-events:none;cursor:default;display:contents">`;
+    });
+    out = out.replace(/<\/a>/gi, "</span>");
+    return out;
+  });
+}
+
+/**
+ * Injeta abaixo do botão "Copiar" (ou abaixo do bloco Quero Ajudar como fallback)
+ * um botão que copia o link atual da vakinha (window.location.href) e mostra
+ * "Link da vakinha copiado!" — atende ao pedido de ter um botão de copiar link do site.
+ */
+export function injectCopyVakinhaLinkButton(body: string): string {
+  if (!body || body.includes("copyVakinhaLinkBtn")) return body;
+  const buttonHtml = `
+<div id="copyVakinhaLinkWrap" style="margin-top:12px">
+  <button type="button" id="copyVakinhaLinkBtn" style="width:100%;background:#fff;border:1px solid #24ca68;color:#24ca68;border-radius:8px;padding:12px 14px;font-weight:700;font-size:14px;font-family:'Lato',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#24ca68" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v3"></path></svg>
+    Copiar link da vakinha
+  </button>
+  <div id="copyVakinhaFeedback" style="display:none;margin-top:8px;background:#EEFFE6;border:1px solid #24ca68;color:#1a5c2e;padding:10px 12px;border-radius:8px;font-size:13px;font-family:'Lato',sans-serif;text-align:center;font-weight:600">Link da vakinha copiado!</div>
+</div>
+<script>
+(function(){
+  var btn=document.getElementById('copyVakinhaLinkBtn');
+  if(!btn) return;
+  btn.addEventListener('click', function(){
+    var text=window.location.href;
+    function show(){var fb=document.getElementById('copyVakinhaFeedback'); if(!fb) return; fb.style.display='block'; setTimeout(function(){fb.style.display='none'}, 2600); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(show).catch(function(){
+        var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); show();}catch(e){} document.body.removeChild(ta);
+      });
+    } else {
+      var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); show();}catch(e){} document.body.removeChild(ta);
+    }
+  });
+})();
+</script>`;
+  // Tenta injetar logo após o botão inferior "Copiar" (pix) — ponto mais próximo do pedido "abaixo do botão de compra em 'copiar'"
+  if (body.includes('data-cy="copy-pix-key-bottom"')) {
+    return body.replace(/(<button[^>]*data-cy="copy-pix-key-bottom"[^>]*>[\s\S]*?<\/button>)/, `$1${buttonHtml}`);
+  }
+  // Fallback: após o bloco dos botões Quero Ajudar / Compartilhar
+  const marker = '<div class="sc-jXbUNg dttRqJ"></div>';
+  if (body.includes(marker)) {
+    return body.replace(marker, `${buttonHtml}${marker}`);
+  }
+  return body + buttonHtml;
 }
 
 /**

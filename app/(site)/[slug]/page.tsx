@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import {
+  applyPageSanitizers,
   applyQueroAjudar,
   applyRelatedCards,
-  disableLogoLinks,
   extractRelatedCard,
   readPage,
 } from "@/lib/content";
@@ -49,7 +49,7 @@ export default async function Page({
       slug: p.meta.slug,
       ...extractRelatedCard(p.body, p.meta.title),
     }));
-  const html = disableLogoLinks(
+  const html = applyPageSanitizers(
     applyRelatedCards(
       applyQueroAjudar(
         record.body,
