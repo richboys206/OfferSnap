@@ -252,11 +252,55 @@ export function listPages(): PageRecord[] {
     .filter((p): p is PageRecord => p !== null);
 }
 
+export function fixAccents(body: string): string {
+  // Corrige mojibake double-encoded (ex: "contribuiÃ§Ã£o" -> "contribuição") quando presente
+  if (!body || !body.includes("Ã")) return body;
+  // Só corrige se contém sequências típicas de double
+  if (body.includes("Ã§") || body.includes("Ã£") || body.includes("Ã¡") || body.includes("Ã©") || body.includes("Ã­") || body.includes("Ã³") || body.includes("Ãú")) {
+    try {
+      const fixed = Buffer.from(body, "latin1").toString("utf8");
+      // Verifica se corrigiu sem quebrar (ex: não deve introduzir �)
+      if (!fixed.includes("�") || body.includes("�")) return fixed;
+      return fixed;
+    } catch {
+      return body;
+    }
+  }
+  return body;
+}
+
+export function removePixKeySection(body: string): string {
+  if (!body || !body.includes("Pix usando a chave")) return body;
+  let out = body;
+  // Variação 1: checkout antigo iSEAiO
+  out = out.replace(/<div class="sc-f294cd4b-0 iSEAiO">[\s\S]*?Você pode ajudar via Pix usando a chave:[\s\S]*?<\/span>\s*<\/div>/g, "");
+  // Variação 2: produto "Você também pode <strong>contribuir via Pix usando a chave:</strong>" + botão Copiar
+  out = out.replace(/<div class="sc-fqkvVR grIjCO">Você também pode[\s\S]*?Pix usando a chave:[\s\S]*?<\/div>\s*<\/div>\s*<div class="sc-dhKdcB jiaHsX[\s\S]*?<button[^>]*>[\s\S]*?Copiar[\s\S]*?<\/button>[\s\S]*?<\/div>\s*<\/div>/g, "");
+  // Fallback genérico
+  if (out.includes("Pix usando a chave")) {
+    out = out.replace(/<div[^>]*>[\s\S]*?Pix usando a chave:[\s\S]*?<\/button>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/g, "");
+    out = out.replace(/Você[^<]*Pix usando a chave:[^<]*<\/div>[\s\S]*?<\/div>/g, "");
+  }
+  return out;
+}
+
+export function removeCopyVakinhaLink(body: string): string {
+  if (!body || !body.includes("copyVakinhaLink")) return body;
+  let out = body;
+  out = out.replace(/<div id="copyVakinhaLinkWrap"[\s\S]*?<\/script>\s*/g, "");
+  out = out.replace(/<div id="copyVakinhaLinkWrap"[\s\S]*?<\/div>\s*<\/div>/g, "");
+  out = out.replace(/copyVakinhaLinkBtn/g, "");
+  return out;
+}
+
 export function applyPageSanitizers(body: string): string {
-  // ordem: remove logo, remove todos header links, injeta botão copiar link e guard de mínimo (caso página contenha checkout)
-  let out = disableLogoLinks(body);
+  // ordem: corrige acentos, remove logo, remove header links, remove pix/copy, guard de mínimo
+  let out = fixAccents(body);
+  out = disableLogoLinks(out);
   out = disableHeaderLinks(out);
-  out = injectCopyVakinhaLinkButton(out);
+  out = removePixKeySection(out);
+  out = removeCopyVakinhaLink(out);
+  // "Copiar link da vakinha" removido a pedido (compartilhar já copia URL)
   out = injectCheckoutMinGuard(out);
   return out;
 }
@@ -535,8 +579,9 @@ export function readCheckout(): PageRecord {
   }
   const meta: PageMeta = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as PageMeta;
   const rawBody = fs.readFileSync(bodyPath, "utf-8");
-  // Checkout: remove header links mas NÃO injeta botão de copiar link (só nas páginas)
-  let body = disableLogoLinks(rawBody);
+  // Checkout: corrige acentos, remove header links, injeta guard de mínimo
+  let body = fixAccents(rawBody);
+  body = disableLogoLinks(body);
   body = disableHeaderLinks(body);
   body = injectCheckoutMinGuard(body);
   let css = "";
