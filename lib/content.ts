@@ -14,29 +14,55 @@ const SEED_CHECKOUT_DIR = path.join(SEED_DIR, "checkout");
 function seedFromRepoIfNeeded() {
   if (CONTENT_DIR === SEED_DIR) return;
   try {
-    // já semeado?
-    if (fs.existsSync(path.join(PAGES_DIR, "vakinha", "page.json"))) return;
     if (!fs.existsSync(SEED_DIR)) return;
     fs.mkdirSync(CONTENT_DIR, { recursive: true });
-    // Node 16+: cpSync disponível
-    const cp = (fs as unknown as { cpSync?: typeof fs.cpSync }).cpSync;
-    if (typeof cp === "function") {
-      if (fs.existsSync(SEED_PAGES_DIR)) cp(SEED_PAGES_DIR, PAGES_DIR, { recursive: true, force: true });
-      if (fs.existsSync(SEED_CHECKOUT_DIR)) cp(SEED_CHECKOUT_DIR, CHECKOUT_DIR, { recursive: true, force: true });
-    } else {
-      // fallback manual
-      const copyRecursive = (src: string, dest: string) => {
-        if (!fs.existsSync(src)) return;
-        fs.mkdirSync(dest, { recursive: true });
-        for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-          const s = path.join(src, entry.name);
-          const d = path.join(dest, entry.name);
-          if (entry.isDirectory()) copyRecursive(s, d);
-          else fs.copyFileSync(s, d);
+    // Sincroniza incrementalmente: copia apenas páginas do seed que ainda não existem em /tmp
+    // Isso corrige o bug onde apenas checava vakinha e novas páginas clonadas ficavam com 404 após deploy
+    if (fs.existsSync(SEED_PAGES_DIR)) {
+      fs.mkdirSync(PAGES_DIR, { recursive: true });
+      for (const entry of fs.readdirSync(SEED_PAGES_DIR, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const src = path.join(SEED_PAGES_DIR, entry.name);
+        const dest = path.join(PAGES_DIR, entry.name);
+        // Se a página ainda não existe em /tmp, copia do repo
+        if (!fs.existsSync(path.join(dest, "page.json")) && fs.existsSync(path.join(src, "page.json"))) {
+          const cp = (fs as unknown as { cpSync?: typeof fs.cpSync }).cpSync;
+          if (typeof cp === "function") {
+            cp(src, dest, { recursive: true, force: true });
+          } else {
+            // fallback manual para um diretório
+            const copyRecursive = (s: string, d: string) => {
+              fs.mkdirSync(d, { recursive: true });
+              for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+                const sp = path.join(s, e.name);
+                const dp = path.join(d, e.name);
+                if (e.isDirectory()) copyRecursive(sp, dp);
+                else fs.copyFileSync(sp, dp);
+              }
+            };
+            copyRecursive(src, dest);
+          }
         }
-      };
-      copyRecursive(SEED_PAGES_DIR, PAGES_DIR);
-      copyRecursive(SEED_CHECKOUT_DIR, CHECKOUT_DIR);
+      }
+    }
+    // Checkout: garante que existe em /tmp
+    if (fs.existsSync(SEED_CHECKOUT_DIR) && !fs.existsSync(path.join(CHECKOUT_DIR, "page.json"))) {
+      const cp = (fs as unknown as { cpSync?: typeof fs.cpSync }).cpSync;
+      if (typeof cp === "function") {
+        cp(SEED_CHECKOUT_DIR, CHECKOUT_DIR, { recursive: true, force: true });
+      } else {
+        fs.mkdirSync(CHECKOUT_DIR, { recursive: true });
+        for (const e of fs.readdirSync(SEED_CHECKOUT_DIR, { withFileTypes: true })) {
+          const sp = path.join(SEED_CHECKOUT_DIR, e.name);
+          const dp = path.join(CHECKOUT_DIR, e.name);
+          if (e.isDirectory()) {
+            fs.mkdirSync(dp, { recursive: true });
+            for (const f of fs.readdirSync(sp, { withFileTypes: true })) {
+              fs.copyFileSync(path.join(sp, f.name), path.join(dp, f.name));
+            }
+          } else fs.copyFileSync(sp, dp);
+        }
+      }
     }
   } catch {
     // silencioso: se falhar, ensureContentDirs cria dirs vazios
@@ -86,14 +112,36 @@ export function normalizeSlug(raw: string): string {
   return stripExt(s) || "pagina";
 }
 
+function isDeletedMarker(slug: string): boolean {
+  if (CONTENT_DIR === SEED_DIR) return false;
+  const marker = path.join(CONTENT_DIR, ".deleted", `${normalizeSlug(slug)}.json`);
+  return fs.existsSync(marker);
+}
+
 export function listPageSlugs(): string[] {
   ensureContentDirs();
-  return fs
-    .readdirSync(PAGES_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
-    .filter((n) => n !== "checkout")
-    .sort();
+  const fromTmp = new Set<string>();
+  try {
+    for (const e of fs.readdirSync(PAGES_DIR, { withFileTypes: true })) {
+      if (e.isDirectory() && e.name !== "checkout") fromTmp.add(e.name);
+    }
+  } catch {}
+  // Fallback: também considera páginas que existem no repo mas ainda não foram copiadas para /tmp
+  // Garante que páginas clonadas nunca dão 404 mesmo se /tmp foi limpo ou seed falhou
+  if (CONTENT_DIR !== SEED_DIR) {
+    try {
+      for (const e of fs.readdirSync(SEED_PAGES_DIR, { withFileTypes: true })) {
+        if (e.isDirectory() && e.name !== "checkout") fromTmp.add(e.name);
+      }
+    } catch {}
+  }
+  // Remove páginas marcadas como deletadas (evita ressuscitar após delete via gerenciador)
+  if (CONTENT_DIR !== SEED_DIR) {
+    for (const slug of Array.from(fromTmp)) {
+      if (isDeletedMarker(slug)) fromTmp.delete(slug);
+    }
+  }
+  return Array.from(fromTmp).sort();
 }
 
 export function listPages(): PageRecord[] {
@@ -109,17 +157,47 @@ export function listPages(): PageRecord[] {
 }
 
 export function readPage(slug: string): PageRecord | null {
-  const dir = path.join(PAGES_DIR, slug);
-  const jsonPath = path.join(dir, "page.json");
-  if (!fs.existsSync(jsonPath)) return null;
-  const meta: PageMeta = JSON.parse(
-    fs.readFileSync(jsonPath, "utf-8")
-  ) as PageMeta;
-  const rawBody = fs.readFileSync(path.join(dir, "body.html"), "utf-8");
-  return {
-    meta,
-    body: disableLogoLinks(rawBody),
-  };
+  const safe = normalizeSlug(slug);
+  // Se foi deletada explicitamente, não ressuscita do seed
+  if (isDeletedMarker(safe)) return null;
+  // 1) tenta em /tmp (ou _content local)
+  let dir = path.join(PAGES_DIR, safe);
+  let jsonPath = path.join(dir, "page.json");
+  if (fs.existsSync(jsonPath)) {
+    try {
+      const meta: PageMeta = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as PageMeta;
+      const rawBody = fs.readFileSync(path.join(dir, "body.html"), "utf-8");
+      return { meta, body: disableLogoLinks(rawBody) };
+    } catch {
+      // cai para fallback
+    }
+  }
+  // 2) fallback para o repo seed (_content em /var/task) — garante que páginas do repo nunca dão 404
+  if (CONTENT_DIR !== SEED_DIR) {
+    dir = path.join(SEED_PAGES_DIR, safe);
+    jsonPath = path.join(dir, "page.json");
+    if (fs.existsSync(jsonPath)) {
+      try {
+        const meta: PageMeta = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as PageMeta;
+        const rawBody = fs.readFileSync(path.join(dir, "body.html"), "utf-8");
+        // Copia sob demanda para /tmp para próximas leituras ficarem rápidas
+        try {
+          seedFromRepoIfNeeded();
+          const dest = path.join(PAGES_DIR, safe);
+          if (!fs.existsSync(path.join(dest, "page.json"))) {
+            fs.mkdirSync(dest, { recursive: true });
+            fs.copyFileSync(jsonPath, path.join(dest, "page.json"));
+            const srcBody = path.join(dir, "body.html");
+            if (fs.existsSync(srcBody)) fs.copyFileSync(srcBody, path.join(dest, "body.html"));
+          }
+        } catch {}
+        return { meta, body: disableLogoLinks(rawBody) };
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export function savePage(
@@ -129,6 +207,11 @@ export function savePage(
 ): PageRecord {
   ensureContentDirs();
   const slug = normalizeSlug(meta.slug);
+  // Se estava marcada como deletada, remove o marker ao recriar
+  if (CONTENT_DIR !== SEED_DIR) {
+    const marker = path.join(CONTENT_DIR, ".deleted", `${slug}.json`);
+    if (fs.existsSync(marker)) fs.rmSync(marker, { force: true });
+  }
   const metaOut: PageMeta = { ...meta, slug };
   const dir = path.join(PAGES_DIR, slug);
   const sanitized = disableLogoLinks(body);
@@ -141,14 +224,38 @@ export function savePage(
       fs.rmSync(prevDir, { recursive: true, force: true });
     }
   }
-  return { meta: metaOut, body };
+  return { meta: metaOut, body: sanitized };
 }
 
 export function deletePage(slug: string): boolean {
-  const dir = path.join(PAGES_DIR, stripExt(slug));
-  if (!fs.existsSync(dir)) return false;
-  fs.rmSync(dir, { recursive: true, force: true });
-  return true;
+  const safe = normalizeSlug(slug);
+  let deleted = false;
+  const dir = path.join(PAGES_DIR, safe);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    deleted = true;
+  }
+  // Marca como deletada para não ressuscitar do seed em fallback (quando CONTENT_DIR !== SEED_DIR)
+  // Isso garante que delete via gerenciador persista mesmo com fallback para /var/task
+  if (CONTENT_DIR !== SEED_DIR) {
+    try {
+      const markerDir = path.join(CONTENT_DIR, ".deleted");
+      fs.mkdirSync(markerDir, { recursive: true });
+      fs.writeFileSync(path.join(markerDir, `${safe}.json`), JSON.stringify({ slug: safe, deletedAt: new Date().toISOString() }), "utf-8");
+      deleted = true;
+    } catch {}
+    // Também tenta remover do seed fallback se o slug foi deletado pelo admin e ainda existe em /tmp via seed anterior
+    // Não podemos deletar de SEED_DIR (read-only), mas o marker já impede fallback
+  }
+  // Local dev (CONTENT_DIR === SEED_DIR): deleta direto do seed
+  if (CONTENT_DIR === SEED_DIR) {
+    const seedDir = path.join(SEED_PAGES_DIR, safe);
+    if (fs.existsSync(seedDir)) {
+      fs.rmSync(seedDir, { recursive: true, force: true });
+      deleted = true;
+    }
+  }
+  return deleted;
 }
 
 export function duplicatePage(slug: string, newSlug: string): PageRecord | null {
@@ -169,17 +276,27 @@ export function duplicatePage(slug: string, newSlug: string): PageRecord | null 
 
 export function readCheckout(): PageRecord {
   ensureContentDirs();
-  const jsonPath = path.join(CHECKOUT_DIR, "page.json");
-  const meta: PageMeta = JSON.parse(
-    fs.readFileSync(jsonPath, "utf-8")
-  ) as PageMeta;
-  const rawBody = fs.readFileSync(path.join(CHECKOUT_DIR, "body.html"), "utf-8");
+  // tenta /tmp primeiro, fallback para repo
+  let jsonPath = path.join(CHECKOUT_DIR, "page.json");
+  let bodyPath = path.join(CHECKOUT_DIR, "body.html");
+  let cssPath = path.join(CHECKOUT_DIR, "styles.css");
+  if (!fs.existsSync(jsonPath) && CONTENT_DIR !== SEED_DIR) {
+    jsonPath = path.join(SEED_CHECKOUT_DIR, "page.json");
+    bodyPath = path.join(SEED_CHECKOUT_DIR, "body.html");
+    cssPath = path.join(SEED_CHECKOUT_DIR, "styles.css");
+  }
+  const meta: PageMeta = JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as PageMeta;
+  const rawBody = fs.readFileSync(bodyPath, "utf-8");
   const body = disableLogoLinks(rawBody);
   let css = "";
   try {
-    css = fs.readFileSync(path.join(CHECKOUT_DIR, "styles.css"), "utf-8");
+    css = fs.readFileSync(cssPath, "utf-8");
   } catch {
-    css = "";
+    try {
+      css = fs.readFileSync(path.join(CHECKOUT_DIR, "styles.css"), "utf-8");
+    } catch {
+      css = "";
+    }
   }
   return { meta, body: css ? `${body}\n<style id="__jsx-1632331453">${css}</style>` : body };
 }
