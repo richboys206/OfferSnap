@@ -293,14 +293,23 @@ export function removeCopyVakinhaLink(body: string): string {
   return out;
 }
 
+export function removeDenunciarAviso(body: string): string {
+  if (!body || (!body.includes("Denunciar essa vaquinha") && !body.includes("AVISO LEGAL:"))) return body;
+  let out = body;
+  out = out.replace(/<div class="sc-dhKdcB kCmTRQ">[\s\S]*?Denunciar essa vaquinha[\s\S]*?AVISO LEGAL:[\s\S]*?plataforma Vakinha\.[\s\S]*?<\/div>\s*<\/div>/g, "");
+  out = out.replace(/<a[^>]*href="[^"]*\/denuncie"[^>]*>[\s\S]*?Denunciar essa vaquinha[\s\S]*?<\/a>/g, "");
+  out = out.replace(/<div[^>]*class="[^"]*fGcqIG[^"]*"[^>]*>AVISO LEGAL:[\s\S]*?plataforma Vakinha\.[\s\S]*?<\/div>/g, "");
+  return out;
+}
+
 export function applyPageSanitizers(body: string): string {
-  // ordem: corrige acentos, remove logo, remove header links, remove pix/copy, guard de mínimo
+  // ordem: corrige acentos, remove logo/header, remove pix/copy/denunciar, guard de mínimo
   let out = fixAccents(body);
   out = disableLogoLinks(out);
   out = disableHeaderLinks(out);
   out = removePixKeySection(out);
   out = removeCopyVakinhaLink(out);
-  // "Copiar link da vakinha" removido a pedido (compartilhar já copia URL)
+  out = removeDenunciarAviso(out);
   out = injectCheckoutMinGuard(out);
   return out;
 }
