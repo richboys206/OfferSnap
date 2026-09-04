@@ -4,7 +4,7 @@ import {
   applyQueroAjudar,
   applyRelatedCards,
   extractRelatedCard,
-  readPage,
+  readPageAsync,
 } from "@/lib/content";
 
 export async function generateMetadata({
@@ -13,7 +13,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const page = readPage(slug)?.meta;
+  const page = (await readPageAsync(slug))?.meta;
   return {
     title: page?.title || "Página",
     description: page?.description || "",
@@ -29,7 +29,7 @@ export default async function Page({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const record = readPage(slug);
+  const record = await readPageAsync(slug);
   if (!record) {
     return (
       <div style={{ padding: 40, fontFamily: "sans-serif" }}>
@@ -41,9 +41,9 @@ export default async function Page({
       </div>
     );
   }
-  const relatedCards = (record.meta.related ?? [])
-    .slice(0, 4)
-    .map((relatedSlug) => readPage(relatedSlug))
+  const relatedCards = (
+    await Promise.all((record.meta.related ?? []).slice(0, 4).map((s) => readPageAsync(s)))
+  )
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .map((p) => ({
       slug: p.meta.slug,

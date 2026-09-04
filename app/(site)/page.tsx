@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { listPages, readPage } from "@/lib/content";
+import { listPagesAsync } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const pages = listPages();
+export default async function HomePage() {
+  const pages = await listPagesAsync();
   return (
     <main
       style={{

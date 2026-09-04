@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listPageSlugs, readPage } from "@/lib/content";
+import { listPageSlugsAsync, readPageAsync } from "@/lib/content";
 import { importFromUrlAction } from "../actions";
 import PagesManager from "../components/PagesManager";
 
@@ -11,9 +11,10 @@ export default async function AdminDashboard({
   searchParams: Promise<{ ok?: string; erro?: string }>;
 }) {
   const params = await searchParams;
-  const slugs = listPageSlugs();
-  const pages = slugs
-    .map((s) => readPage(s))
+  const slugs = await listPageSlugsAsync();
+  const pages = (
+    await Promise.all(slugs.map((s) => readPageAsync(s)))
+  )
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .map((p) => ({
       slug: p.meta.slug,

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { disableLogoLinks, readCheckout, readPage, renderCheckoutTitle } from "@/lib/content";
+import { disableHeaderLinks, disableLogoLinks, readCheckout, readPageAsync, renderCheckoutTitle } from "@/lib/content";
 import CheckoutBody from "./CheckoutBody";
 
 export const dynamic = "force-dynamic";
 
-function pageTitle(slug: string): string | null {
-  const page = readPage(slug);
+async function pageTitle(slug: string): Promise<string | null> {
+  const page = await readPageAsync(slug);
   if (!page) return null;
   return page.meta.name?.trim() || page.meta.title?.trim() || null;
 }
@@ -17,7 +17,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { origem } = await searchParams;
   const checkout = readCheckout();
-  const title = origem ? pageTitle(origem) : null;
+  const title = origem ? await pageTitle(origem) : null;
   return {
     title: title
       ? `Contribuindo para ${title} | Vaquinhas online`
@@ -35,8 +35,8 @@ export default async function CheckoutPage({
 }) {
   const { origem } = await searchParams;
   const checkout = readCheckout();
-  const title = origem ? pageTitle(origem) : null;
+  const title = origem ? await pageTitle(origem) : null;
   const rawBody = title ? renderCheckoutTitle(checkout.body, title) : checkout.body;
-  const body = disableLogoLinks(rawBody);
+  const body = disableHeaderLinks(disableLogoLinks(rawBody));
   return <CheckoutBody html={body} />;
 }

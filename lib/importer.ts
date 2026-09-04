@@ -1,4 +1,4 @@
-import { applyPageSanitizers, listPageSlugs, normalizeSlug, savePage } from "./content";
+import { applyPageSanitizers, listPageSlugsAsync, normalizeSlug, savePage } from "./content";
 
 function clean(s: string): string {
   return s
@@ -116,8 +116,8 @@ async function fetchHtml(url: string): Promise<string> {
   return res.text();
 }
 
-function uniqueSlug(base: string): string {
-  const taken = new Set(listPageSlugs());
+async function uniqueSlug(base: string): Promise<string> {
+  const taken = new Set(await listPageSlugsAsync());
   const root = normalizeSlug(base);
   let slug = root;
   let n = 2;
@@ -143,7 +143,7 @@ export async function importFromUrl(rawUrl: string): Promise<{ slug: string; nam
   const name = (extractTitle(html).split("|")[0] || "Página importada").trim();
   const title = extractTitle(html) || name;
   const description = extractDescription(html);
-  const slug = uniqueSlug(name);
+  const slug = await uniqueSlug(name);
   const now = new Date().toISOString();
 
   savePage(

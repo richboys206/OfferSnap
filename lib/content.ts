@@ -1,6 +1,25 @@
 import fs from "fs";
 import path from "path";
 
+// Blob opcional para persistência durável em produção (evita perda de páginas clonadas após redeploy/lambda frio)
+// Só ativa se BLOB_READ_WRITE_TOKEN estiver configurado no Vercel
+let blobSupported: boolean | null = null;
+async function getBlobSupport(): Promise<boolean> {
+  if (blobSupported !== null) return blobSupported;
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    blobSupported = false;
+    return false;
+  }
+  try {
+    await import("@vercel/blob");
+    blobSupported = true;
+    return true;
+  } catch {
+    blobSupported = false;
+    return false;
+  }
+}
+
 const SEED_DIR = path.join(process.cwd(), "_content");
 // Vercel filesystem é read-only em /var/task — escrita só em /tmp (efêmero)
 export const CONTENT_DIR = process.env.VERCEL
@@ -67,6 +86,64 @@ function seedFromRepoIfNeeded() {
   } catch {
     // silencioso: se falhar, ensureContentDirs cria dirs vazios
   }
+}
+
+// ── Blob helpers (persistência durável) ──
+async function saveToBlob(slug: string, meta: PageMeta, body: string): Promise<void> {
+  if (!(await getBlobSupport())) return;
+  try {
+    const { put } = await import("@vercel/blob");
+    const base = `pages/${slug}`;
+    await put(`${base}/page.json`, JSON.stringify(meta, null, 2), { access: "public", addRandomSuffix: false, contentType: "application/json" });
+    await put(`${base}/body.html`, body, { access: "public", addRandomSuffix: false, contentType: "text/html; charset=utf-8" });
+  } catch {
+    // silencioso: blob é best-effort, filesystem já salvou
+  }
+}
+
+async function readFromBlob(slug: string): Promise<PageRecord | null> {
+  if (!(await getBlobSupport())) return null;
+  try {
+    const { list } = await import("@vercel/blob");
+    const prefix = `pages/${slug}/`;
+    const res = await list({ prefix });
+    const jsonBlob = res.blobs.find((b) => b.pathname === `${prefix}page.json`);
+    const bodyBlob = res.blobs.find((b) => b.pathname === `${prefix}body.html`);
+    if (!jsonBlob || !bodyBlob) return null;
+    const [metaRes, bodyRes] = await Promise.all([fetch(jsonBlob.url), fetch(bodyBlob.url)]);
+    if (!metaRes.ok || !bodyRes.ok) return null;
+    const meta = (await metaRes.json()) as PageMeta;
+    const rawBody = await bodyRes.text();
+    return { meta, body: applyPageSanitizers(rawBody) };
+  } catch {
+    return null;
+  }
+}
+
+async function listSlugsFromBlob(): Promise<string[]> {
+  if (!(await getBlobSupport())) return [];
+  try {
+    const { list } = await import("@vercel/blob");
+    const res = await list({ prefix: "pages/" });
+    const slugs = new Set<string>();
+    for (const b of res.blobs) {
+      const m = b.pathname.match(/^pages\/([^/]+)\//);
+      if (m) slugs.add(m[1]);
+    }
+    return Array.from(slugs);
+  } catch {
+    return [];
+  }
+}
+
+async function deleteFromBlob(slug: string): Promise<void> {
+  if (!(await getBlobSupport())) return;
+  try {
+    const { del, list } = await import("@vercel/blob");
+    const res = await list({ prefix: `pages/${slug}/` });
+    const urls = res.blobs.map((b) => b.url);
+    if (urls.length) await del(urls);
+  } catch {}
 }
 
 export type TemplateKind = "inicio" | "pagamento";
@@ -226,6 +303,8 @@ export function savePage(
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "page.json"), JSON.stringify(metaOut, null, 2), "utf-8");
   fs.writeFileSync(path.join(dir, "body.html"), sanitized, "utf-8");
+  // Persistência durável em Blob (best-effort, não bloqueia)
+  void saveToBlob(slug, metaOut, sanitized);
   if (prev && prev !== slug) {
     const prevDir = path.join(PAGES_DIR, stripExt(prev));
     if (fs.existsSync(prevDir) && prevDir !== dir) {
@@ -252,8 +331,6 @@ export function deletePage(slug: string): boolean {
       fs.writeFileSync(path.join(markerDir, `${safe}.json`), JSON.stringify({ slug: safe, deletedAt: new Date().toISOString() }), "utf-8");
       deleted = true;
     } catch {}
-    // Também tenta remover do seed fallback se o slug foi deletado pelo admin e ainda existe em /tmp via seed anterior
-    // Não podemos deletar de SEED_DIR (read-only), mas o marker já impede fallback
   }
   // Local dev (CONTENT_DIR === SEED_DIR): deleta direto do seed
   if (CONTENT_DIR === SEED_DIR) {
@@ -263,6 +340,7 @@ export function deletePage(slug: string): boolean {
       deleted = true;
     }
   }
+  void deleteFromBlob(safe);
   return deleted;
 }
 
@@ -280,6 +358,42 @@ export function duplicatePage(slug: string, newSlug: string): PageRecord | null 
     updatedAt: now,
   };
   return savePage(undefined, meta, src.body);
+}
+
+// ── Async wrappers com Blob (para uso em Server Components) ──
+export async function readPageAsync(slug: string): Promise<PageRecord | null> {
+  const sync = readPage(slug);
+  if (sync) return sync;
+  const fromBlob = await readFromBlob(slug);
+  if (fromBlob) {
+    try {
+      const dir = path.join(PAGES_DIR, normalizeSlug(slug));
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "page.json"), JSON.stringify(fromBlob.meta, null, 2), "utf-8");
+      fs.writeFileSync(path.join(dir, "body.html"), fromBlob.body, "utf-8");
+    } catch {}
+    return fromBlob;
+  }
+  return null;
+}
+
+export async function listPageSlugsAsync(): Promise<string[]> {
+  const sync = new Set(listPageSlugs());
+  const blobSlugs = await listSlugsFromBlob();
+  for (const s of blobSlugs) {
+    if (!isDeletedMarker(s)) sync.add(s);
+  }
+  return Array.from(sync).sort();
+}
+
+export async function listPagesAsync(): Promise<PageRecord[]> {
+  const slugs = await listPageSlugsAsync();
+  const out: PageRecord[] = [];
+  for (const slug of slugs) {
+    const p = await readPageAsync(slug);
+    if (p) out.push(p);
+  }
+  return out;
 }
 
 export function readCheckout(): PageRecord {
