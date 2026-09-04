@@ -33,3 +33,4 @@ next-env.d.ts
 /server.err.log
 .vercel
 .env*
+/logs/
