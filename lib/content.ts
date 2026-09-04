@@ -64,22 +64,41 @@ function seedFromRepoIfNeeded() {
         }
       }
     }
-    // Checkout: garante que existe em /tmp
-    if (fs.existsSync(SEED_CHECKOUT_DIR) && !fs.existsSync(path.join(CHECKOUT_DIR, "page.json"))) {
-      const cp = (fs as unknown as { cpSync?: typeof fs.cpSync }).cpSync;
-      if (typeof cp === "function") {
-        cp(SEED_CHECKOUT_DIR, CHECKOUT_DIR, { recursive: true, force: true });
+    // Checkout: garante que existe em /tmp e está atualizado (força sync se seed mudou)
+    if (fs.existsSync(SEED_CHECKOUT_DIR)) {
+      let shouldSync = false;
+      const seedJson = path.join(SEED_CHECKOUT_DIR, "page.json");
+      const destJson = path.join(CHECKOUT_DIR, "page.json");
+      const seedBody = path.join(SEED_CHECKOUT_DIR, "body.html");
+      const destBody = path.join(CHECKOUT_DIR, "body.html");
+      if (!fs.existsSync(destJson) || !fs.existsSync(destBody)) {
+        shouldSync = true;
       } else {
-        fs.mkdirSync(CHECKOUT_DIR, { recursive: true });
-        for (const e of fs.readdirSync(SEED_CHECKOUT_DIR, { withFileTypes: true })) {
-          const sp = path.join(SEED_CHECKOUT_DIR, e.name);
-          const dp = path.join(CHECKOUT_DIR, e.name);
-          if (e.isDirectory()) {
-            fs.mkdirSync(dp, { recursive: true });
-            for (const f of fs.readdirSync(sp, { withFileTypes: true })) {
-              fs.copyFileSync(path.join(sp, f.name), path.join(dp, f.name));
-            }
-          } else fs.copyFileSync(sp, dp);
+        try {
+          const sBody = fs.readFileSync(seedBody, "utf-8");
+          const dBody = fs.readFileSync(destBody, "utf-8");
+          // se seed contém o guard de mínimo e destino não, ou conteúdos diferem, sincroniza
+          if (sBody !== dBody) shouldSync = true;
+        } catch {
+          shouldSync = true;
+        }
+      }
+      if (shouldSync) {
+        const cp = (fs as unknown as { cpSync?: typeof fs.cpSync }).cpSync;
+        if (typeof cp === "function") {
+          cp(SEED_CHECKOUT_DIR, CHECKOUT_DIR, { recursive: true, force: true });
+        } else {
+          fs.mkdirSync(CHECKOUT_DIR, { recursive: true });
+          for (const e of fs.readdirSync(SEED_CHECKOUT_DIR, { withFileTypes: true })) {
+            const sp = path.join(SEED_CHECKOUT_DIR, e.name);
+            const dp = path.join(CHECKOUT_DIR, e.name);
+            if (e.isDirectory()) {
+              fs.mkdirSync(dp, { recursive: true });
+              for (const f of fs.readdirSync(sp, { withFileTypes: true })) {
+                fs.copyFileSync(path.join(sp, f.name), path.join(dp, f.name));
+              }
+            } else fs.copyFileSync(sp, dp);
+          }
         }
       }
     }
@@ -234,10 +253,11 @@ export function listPages(): PageRecord[] {
 }
 
 export function applyPageSanitizers(body: string): string {
-  // ordem: remove logo, remove todos header links, injeta botão copiar link
+  // ordem: remove logo, remove todos header links, injeta botão copiar link e guard de mínimo (caso página contenha checkout)
   let out = disableLogoLinks(body);
   out = disableHeaderLinks(out);
   out = injectCopyVakinhaLinkButton(out);
+  out = injectCheckoutMinGuard(out);
   return out;
 }
 
@@ -396,6 +416,112 @@ export async function listPagesAsync(): Promise<PageRecord[]> {
   return out;
 }
 
+export function injectCheckoutMinGuard(body: string): string {
+  if (!body || !body.includes('id="amount"')) return body;
+  if (body.includes("checkoutMinGuard")) return body;
+  const guard = `<script id="checkoutMinGuard">
+(function(){
+  var MIN=1500;
+  var LABEL="R$ 15,00";
+  function ready(fn){if(document.readyState!=="loading")fn();else document.addEventListener("DOMContentLoaded",fn);}
+  ready(function(){
+    var amount=document.getElementById("amount");
+    var bundle=document.getElementById("bundleCheck");
+    var heart=document.getElementById("bundleHeartCheck");
+    var btn=(function(){
+      var all=Array.from(document.querySelectorAll("button.sc-fPXMVe"));
+      var b=all.find(function(x){return (x.textContent||"").indexOf("Contribuir")>-1;});
+      return b||document.querySelector("#iGWHkz button.sc-fPXMVe")||document.querySelector("button.sc-fPXMVe.ebXcre");
+    })();
+    if(!amount||!btn) return;
+    if(!document.getElementById("checkoutMinHint")){
+      var hint=document.createElement("div");
+      hint.id="checkoutMinHint";
+      hint.textContent="Valor mínimo: "+LABEL;
+      hint.style.cssText="margin-top:6px;font-size:12px;color:#67736c;font-family:Lato,Arial,sans-serif";
+      var block=amount.closest(".sc-cWSHoV")||amount.closest("div");
+      if(block&&block.parentElement) block.insertAdjacentElement("afterend",hint);
+      else amount.insertAdjacentElement("afterend",hint);
+    }
+    if(!document.getElementById("checkoutMinError")){
+      var err=document.createElement("div");
+      err.id="checkoutMinError";
+      err.setAttribute("role","alert");
+      err.style.cssText="display:none;margin-top:8px;padding:10px 12px;border-radius:8px;font-family:Lato,Arial,sans-serif;font-size:13px;font-weight:600;background:#FFE6E6;border:1px solid #e74c3c;color:#7a1a1a";
+      var hint2=document.getElementById("checkoutMinHint");
+      if(hint2) hint2.insertAdjacentElement("afterend",err);
+      else amount.insertAdjacentElement("afterend",err);
+    }
+    var errEl=document.getElementById("checkoutMinError");
+    function showErr(show){
+      if(!errEl) return;
+      if(show){
+        errEl.textContent="Valor mínimo é "+LABEL+". Por favor, informe um valor igual ou superior a "+LABEL+".";
+        errEl.style.display="block";
+        amount.style.borderColor="#e74c3c";
+        amount.style.boxShadow="0 0 0 2px rgba(231,76,60,.15)";
+        amount.setAttribute("aria-invalid","true");
+      } else {
+        errEl.style.display="none";
+        amount.style.borderColor="";
+        amount.style.boxShadow="";
+        amount.removeAttribute("aria-invalid");
+      }
+    }
+    function getBase(){
+      var raw=(amount.value||"").replace(/\\D/g,"");
+      return raw?parseInt(raw,10):0;
+    }
+    function update(){
+      var base=getBase();
+      var isLoading=btn.dataset.loading==="true";
+      var habilitado=base>=MIN && !isLoading;
+      btn.disabled=!habilitado;
+      btn.style.pointerEvents=habilitado?"auto":"none";
+      btn.style.opacity=habilitado?"1":"0.6";
+      if(habilitado){btn.classList.remove("ebXcre");btn.classList.add("brsGow");}
+      else {btn.classList.add("ebXcre");btn.classList.remove("brsGow");}
+      var abaixo=base>0 && base<MIN;
+      showErr(abaixo);
+    }
+    function format(){
+      var raw=amount.value.replace(/\\D/g,"");
+      if(!raw){amount.value="";return;}
+      var f=(parseInt(raw,10)/100).toFixed(2).replace(".",",");
+      if(amount.value!==f) amount.value=f;
+    }
+    amount.addEventListener("input",function(){format();update();});
+    amount.addEventListener("keyup",function(){format();update();});
+    amount.addEventListener("change",function(){format();update();});
+    if(bundle) bundle.addEventListener("change",update);
+    if(heart) heart.addEventListener("change",update);
+    setInterval(update,300);
+    update();
+    var form=amount.closest("form");
+    if(form){
+      form.addEventListener("submit",function(e){
+        var base=getBase();
+        if(base>0 && base<MIN){
+          e.preventDefault();e.stopPropagation();
+          showErr(true);
+          amount.focus();
+        }
+      });
+    }
+    btn.addEventListener("click",function(e){
+      var base=getBase();
+      if(base>0 && base<MIN){
+        e.preventDefault();e.stopPropagation();
+        showErr(true);
+      }
+    },true);
+  });
+})();
+</script>`;
+  if (body.includes("</form>")) return body.replace("</form>", guard + "</form>");
+  return body + guard;
+}
+
 export function readCheckout(): PageRecord {
   ensureContentDirs();
   // tenta /tmp primeiro, fallback para repo
@@ -412,6 +538,7 @@ export function readCheckout(): PageRecord {
   // Checkout: remove header links mas NÃO injeta botão de copiar link (só nas páginas)
   let body = disableLogoLinks(rawBody);
   body = disableHeaderLinks(body);
+  body = injectCheckoutMinGuard(body);
   let css = "";
   try {
     css = fs.readFileSync(cssPath, "utf-8");

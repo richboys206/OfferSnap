@@ -129,13 +129,13 @@ export default function CheckoutBody({ html }: { html: string }) {
       // lê estado atual diretamente do DOM para evitar closure stale
       const isLoading = (btn as HTMLButtonElement).dataset.loading === "true";
       const raw = (amount?.value || "").replace(/\D/g, "");
-      const centavos = raw ? parseInt(raw, 10) + ((bundle?.checked || heart?.checked) ? 499 : 0) : 0;
-      const habilitado = centavos >= MIN_CENTAVOS && !isLoading;
+      const base = raw ? parseInt(raw, 10) : 0;
+      const habilitado = base >= MIN_CENTAVOS && !isLoading;
       btn.disabled = !habilitado;
       btn.style.pointerEvents = habilitado ? "auto" : "none";
       btn.style.opacity = habilitado ? "1" : "0.6";
-      // mensagem inline quando valor >0 mas abaixo do mínimo
-      const abaixoMinimo = centavos > 0 && centavos < MIN_CENTAVOS;
+      // mensagem inline quando valor >0 mas abaixo do mínimo (base, sem contar turbina)
+      const abaixoMinimo = base > 0 && base < MIN_CENTAVOS;
       showMinError(abaixoMinimo);
       // troca classe visual: ebXcre = desabilitado cinza, brsGow = habilitado verde
       if (habilitado) {
@@ -225,7 +225,7 @@ export default function CheckoutBody({ html }: { html: string }) {
     const bundleOn = (bundle?.checked || heart?.checked) ?? false;
     const valorCentavos = baseCentavos + (bundleOn ? 499 : 0);
 
-    if (valorCentavos < 1500) {
+    if (baseCentavos < 1500) {
       setMsg("Valor mínimo é R$ 15,00. Por favor, informe um valor igual ou superior a R$ 15,00.");
       setMsgType("error");
       // também mostra erro inline próximo ao input
@@ -324,10 +324,9 @@ export default function CheckoutBody({ html }: { html: string }) {
     } finally {
       setLoading(false);
       if (btnEl) btnEl.dataset.loading = "false";
-      // força reavaliação do botão
+      // força reavaliação do botão (base sem turbina)
       const raw2 = (amount?.value || "").replace(/\D/g, "");
-      const bundleOn2 = (bundle?.checked || heart?.checked) ?? false;
-      const cent = raw2 ? parseInt(raw2, 10) + (bundleOn2 ? 499 : 0) : 0;
+      const cent = raw2 ? parseInt(raw2, 10) : 0;
       if (btnEl) {
         const habilitado2 = cent >= 1500;
         btnEl.disabled = !habilitado2;
