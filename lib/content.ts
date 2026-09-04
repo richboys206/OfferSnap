@@ -115,9 +115,10 @@ export function readPage(slug: string): PageRecord | null {
   const meta: PageMeta = JSON.parse(
     fs.readFileSync(jsonPath, "utf-8")
   ) as PageMeta;
+  const rawBody = fs.readFileSync(path.join(dir, "body.html"), "utf-8");
   return {
     meta,
-    body: fs.readFileSync(path.join(dir, "body.html"), "utf-8"),
+    body: disableLogoLinks(rawBody),
   };
 }
 
@@ -130,9 +131,10 @@ export function savePage(
   const slug = normalizeSlug(meta.slug);
   const metaOut: PageMeta = { ...meta, slug };
   const dir = path.join(PAGES_DIR, slug);
+  const sanitized = disableLogoLinks(body);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "page.json"), JSON.stringify(metaOut, null, 2), "utf-8");
-  fs.writeFileSync(path.join(dir, "body.html"), body, "utf-8");
+  fs.writeFileSync(path.join(dir, "body.html"), sanitized, "utf-8");
   if (prev && prev !== slug) {
     const prevDir = path.join(PAGES_DIR, stripExt(prev));
     if (fs.existsSync(prevDir) && prevDir !== dir) {
@@ -171,7 +173,8 @@ export function readCheckout(): PageRecord {
   const meta: PageMeta = JSON.parse(
     fs.readFileSync(jsonPath, "utf-8")
   ) as PageMeta;
-  const body = fs.readFileSync(path.join(CHECKOUT_DIR, "body.html"), "utf-8");
+  const rawBody = fs.readFileSync(path.join(CHECKOUT_DIR, "body.html"), "utf-8");
+  const body = disableLogoLinks(rawBody);
   let css = "";
   try {
     css = fs.readFileSync(path.join(CHECKOUT_DIR, "styles.css"), "utf-8");
@@ -319,6 +322,36 @@ export function extractRelatedCard(
     }
   }
   return { title, image, raisedText, goalText, goalCompact, percent };
+}
+
+/**
+ * Remove o link do logo Vakinha no cabeçalho (e rodapé) das páginas clonadas.
+ * O logo originalmente vem como <a href="/"><svg ...logo...></svg></a> ou
+ * <a href="https://www.vakinha.com.br/"><svg ...></svg></a>. Clicar enviava
+ * para "/" que no OfferSnap é o gerenciador. Esta função neutraliza apenas
+ * esses links de logo, preservando todos os demais <a> da página.
+ */
+export function disableLogoLinks(body: string): string {
+  if (!body || !body.includes("headerContainer")) return body;
+  // Substitui ancoras que envolvem diretamente o SVG do logo Vakinha
+  // Detecta logo pelos atributos/tamanho/viewBox específicos ou pelo path característico
+  return body.replace(
+    /<a\b[^>]*href\s*=\s*["'](?:\/|https?:\/\/(?:www\.)?vakinha\.com\.br\/?)["'][^>]*>\s*(<svg[^>]*>[\s\S]*?<\/svg>)\s*<\/a>/gi,
+    (match, svg: string) => {
+      const isLogo =
+        svg.includes("M6.253") ||
+        svg.includes("M5.11") ||
+        svg.includes("M2.368") ||
+        svg.includes('viewBox="0 0 151 40"') ||
+        svg.includes('viewBox="0 0 123 32"') ||
+        svg.includes('viewBox="0 0 57 15"') ||
+        svg.includes('width="125"') ||
+        svg.includes('width="170"') ||
+        svg.includes('width="91"');
+      if (!isLogo) return match;
+      return `<span data-logo-disabled="true" style="display:contents;cursor:default;pointer-events:none">${svg}</span>`;
+    }
+  );
 }
 
 /**

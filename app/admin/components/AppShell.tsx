@@ -73,8 +73,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           className={`shell-sidebar${open ? " open" : ""}`}
         >
           <div className="shell-brand">
-            <img src="/logo.svg" alt="" className="shell-brand-logo" />
-            OfferSnap
+            <img src="/logo.svg" alt="OfferSnap" className="shell-brand-logo" />
           </div>
           <nav
             ref={navRef}

@@ -31,3 +31,5 @@ next-env.d.ts
 /server.log
 /server.pid
 /server.err.log
+.vercel
+.env*

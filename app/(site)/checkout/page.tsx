@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { readCheckout, readPage, renderCheckoutTitle } from "@/lib/content";
+import { disableLogoLinks, readCheckout, readPage, renderCheckoutTitle } from "@/lib/content";
 import CheckoutBody from "./CheckoutBody";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,7 @@ export default async function CheckoutPage({
   const { origem } = await searchParams;
   const checkout = readCheckout();
   const title = origem ? pageTitle(origem) : null;
-  const body = title ? renderCheckoutTitle(checkout.body, title) : checkout.body;
+  const rawBody = title ? renderCheckoutTitle(checkout.body, title) : checkout.body;
+  const body = disableLogoLinks(rawBody);
   return <CheckoutBody html={body} />;
 }

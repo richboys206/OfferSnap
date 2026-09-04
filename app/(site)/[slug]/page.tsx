@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import {
   applyQueroAjudar,
   applyRelatedCards,
+  disableLogoLinks,
   extractRelatedCard,
   readPage,
 } from "@/lib/content";
@@ -48,13 +49,15 @@ export default async function Page({
       slug: p.meta.slug,
       ...extractRelatedCard(p.body, p.meta.title),
     }));
-  const html = applyRelatedCards(
-    applyQueroAjudar(
-      record.body,
-      record.meta.checkoutUrl || "/checkout",
-      record.meta.slug
-    ),
-    relatedCards
+  const html = disableLogoLinks(
+    applyRelatedCards(
+      applyQueroAjudar(
+        record.body,
+        record.meta.checkoutUrl || "/checkout",
+        record.meta.slug
+      ),
+      relatedCards
+    )
   );
   return (
     <div

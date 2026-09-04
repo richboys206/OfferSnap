@@ -1,4 +1,4 @@
-import { listPageSlugs, normalizeSlug, savePage } from "./content";
+import { disableLogoLinks, listPageSlugs, normalizeSlug, savePage } from "./content";
 
 function clean(s: string): string {
   return s
@@ -135,7 +135,7 @@ function uniqueSlug(base: string): string {
 export async function importFromUrl(rawUrl: string): Promise<{ slug: string; name: string }> {
   const url = validateUrl(rawUrl);
   const html = await fetchHtml(url.toString());
-  const body = ensureBadges(sanitizePixEmails(extractNextBody(html)));
+  const body = disableLogoLinks(ensureBadges(sanitizePixEmails(extractNextBody(html))));
   if (!body || body.length < 50) {
     throw new Error("Não foi possível extrair o conteúdo da página informada.");
   }
